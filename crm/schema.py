@@ -167,6 +167,20 @@ class Query(graphene.ObjectType):
     order = graphene.relay.Node.Field(OrderType)
     all_orders = DjangoFilterConnectionField(OrderType)
 
+    total_customers = graphene.Int()
+    total_orders = graphene.Int()
+    total_revenue = graphene.Float()
+
+    def resolve_total_customers(self, info):
+        return Customer.objects.count()
+
+    def resolve_total_orders(self, info):
+        return Order.objects.count()
+
+    def resolve_total_revenue(self, info):
+        from django.db.models import Sum
+        return Order.objects.aggregate(total=Sum("total_amount"))["total"] or 0.0
+
     # def resolve_all_customers(root, info):
     #     return Customer.objects.all()
 
@@ -176,8 +190,27 @@ class Query(graphene.ObjectType):
     # def resolve_all_orders(root, info):
     #     return Order.objects.all()
 
+class UpdateLowStockProducts(graphene.Mutation):
+    success = graphene.String()
+    updated_products = graphene.List(ProductType)
+    
+    def mutate(self, info):
+        low_stock_products = Product.objects.filter(stock__lte=10)
+        updated_products = []
+
+        for product in low_stock_products:
+            product.stock += 10
+            product.save()
+            updated_products.append(product)
+
+        return UpdateLowStockProducts(
+            success="Low stock products updated successfully!",
+            updated_products=updated_products
+        )
+
 class Mutation(graphene.ObjectType):
     create_customer = CreateCustomer.Field()
     bulk_create_customers = BulkCreateCustomers.Field()
     create_product = CreateProduct.Field()
     create_order = CreateOrder.Field()
+    update_low_stock_products = UpdateLowStockProducts.Field()
